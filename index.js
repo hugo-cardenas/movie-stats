@@ -58,6 +58,7 @@ const getDetailPageData = async(listId, start = 1) => {
     // const data = await scrape.scrapeHTML($, {
 
     const data = await scrape(url, {
+        error: '.error_code_404',
         movies: {
             listItem: '.list_item > .info',
             data: {
@@ -86,6 +87,10 @@ const getDetailPageData = async(listId, start = 1) => {
         },
         nextStart: nextStartConfig
     });
+
+    if (data.error) {
+        throw new Error(`The specified list with id "${listId}" was not found or is not public`);
+    }
 
     return data;
 };
