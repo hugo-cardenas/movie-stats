@@ -1,7 +1,5 @@
 "use latest";
 
-const pify = require('pify');
-const fs = pify(require('fs'));
 const querystring = require('querystring');
 const scrape = require('scrape-it');
 const chrono = require('chrono-node');
@@ -9,21 +7,14 @@ const chrono = require('chrono-node');
 const VIEW_COMPACT = 'compact';
 const VIEW_DETAIL = 'detail';
 
-const ENABLE_LOG = false;
-
 const log = (...args) => {
-    if (ENABLE_LOG) {
+    if (process.env.LOG_ENABLED === '1') {
         console.log('---');
         console.log('');
         args.forEach(arg => console.log(arg));
         console.log('');
     }
 };
-
-const logResponseData = (data) => {
-    const { movies, nextStart } = data;
-    log(`RECEIVED ${movies.length} MOVIES, from "${movies[0].name}" to "${movies[movies.length - 1].name}", NEXT START: ${nextStart}`);
-}
 
 const getUrl = (listId, view, start) => {
     return `http://www.imdb.com/list/${listId}/?start=${start}&view=${view}&sort=created:asc`
@@ -52,10 +43,6 @@ const indexMoviesByName = movies => {
 const getDetailPageData = async(listId, start = 1) => {
     const url = getUrl(listId, VIEW_DETAIL, start);
     log('REQUESTING URL', url);
-
-    // const html = await fs.readFile('./imdb_detailed1.html', 'UTF-8');
-    // const $ = cheerio.load(html);
-    // const data = await scrape.scrapeHTML($, {
 
     const data = await scrape(url, {
         error: '.error_code_404',
@@ -88,6 +75,8 @@ const getDetailPageData = async(listId, start = 1) => {
         nextStart: nextStartConfig
     });
 
+    log('RECEIVED DATA', data);
+
     if (data.error) {
         throw new Error(`The specified list with id "${listId}" was not found or is not public`);
     }
@@ -99,23 +88,14 @@ const getCompactPageData = async(listId, start = 1) => {
     const url = getUrl(listId, VIEW_COMPACT, start);
     log('REQUESTING URL', url);
 
-    // const html = await fs.readFile('./imdb_compact1.html', 'UTF-8');
-    // const $ = cheerio.load(html);
-    // const data = await scrape.scrapeHTML($, {
-
     const data = await scrape(url, {
         movies: {
             listItem: '.list_item.odd, .list_item.even',
             data: {
                 name: '.title > a',
-                created: 'td.created',
-                addedAtYear: {
+                createdAt: {
                     selector: 'td.created',
-                    convert: val => chrono.parseDate(val).getFullYear()
-                },
-                addedAtMonth: {
-                    selector: 'td.created',
-                    convert: val => chrono.parseDate(val).getMonth()
+                    convert: val => Math.floor(chrono.parseDate(val).getTime() / 1000)
                 },
                 userRating: 'td.user_rating',
                 year: 'td.year'
@@ -123,6 +103,8 @@ const getCompactPageData = async(listId, start = 1) => {
         },
         nextStart: nextStartConfig
     });
+
+    log('RECEIVED DATA', data);
 
     return data;
 };
@@ -134,7 +116,7 @@ const getMovieDataWithPagination = async(listId, requestFunction) => {
         movies = movies.concat(data.movies);
         nextStart = data.nextStart;
     }
-    movies = movies.map((movie, i) => Object.assign({}, movie, { timeIndex: i }));
+    movies = movies.map((movie, i) => Object.assign({}, movie, { timelineIndex: i }));
     return indexMoviesByName(movies);
 };
 
